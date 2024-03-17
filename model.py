@@ -48,7 +48,7 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + (self.pe[:, :x.shape(1), :]).requires_grad_(False) # add the positional encoding to the input
+        x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False) # add the positional encoding to the input
         return self.dropout(x)
 
 
@@ -56,11 +56,11 @@ class PositionalEncoding(nn.Module):
 
 #LayerNornalization is used to normalize the input before applying the attention and feedforward layers    
 class LayerNorm(nn.Module):
-    def __init__(self, eps: float = 1e-6) -> None:
+    def __init__(self, features: int, eps: float = 1e-6) -> None:
         super().__init__()
         self.eps = eps
-        self.alpha = nn.Parameter(torch.ones(1)) # multiplicative factor
-        self.beta = nn.Parameter(torch.zeros(1)) # additive factor
+        self.alpha = nn.Parameter(torch.ones(features)) # multiplicative factor
+        self.beta = nn.Parameter(torch.zeros(features)) # additive factor
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         #x= x.type(dtype=torch.float32)
@@ -135,8 +135,8 @@ class MultiHeadAttentionLayer(nn.Module):
         # split the queries, the keys, and the values into multiple heads
         # (batch_size, seq_len, d_model) -> (batch_size,  seq_len, num_heads, d_k) -> (batch_size, num_heads, seq_len, d_k)
         q = query.view(query.shape[0], query.shape[1], self.num_heads, self.d_k).transpose(1,2) 
-        k = key.view(key.shape[0], key.shape[1], self.num_heads, self.d_k) 
-        v = value.view(value.shape[0], value.shape[1], self.num_heads, self.d_k) 
+        k = key.view(key.shape[0], key.shape[1], self.num_heads, self.d_k).transpose(1,2)
+        v = value.view(value.shape[0], value.shape[1], self.num_heads, self.d_k).transpose(1,2)
 
         # calculate the scaled dot-product attention
         # apply the scaled dot-product attention
@@ -149,32 +149,32 @@ class MultiHeadAttentionLayer(nn.Module):
         return self.linear_o(x) # (batch_size, seq_len, d_model) -> (batch_size, seq_len, d_model)
     
 class ResidualConnection(nn.Module):
-    def __init__(self, dropout: float) -> None:
+    def __init__(self, features: int, dropout: float) -> None:
         super().__init__()
-        self.norm = LayerNorm() # layer normalization
+        self.norm = LayerNorm(features) # layer normalization
         self.dropout = nn.Dropout(dropout) # dropout layer for regularization
 
     def forward(self, x: torch.Tensor, sublayer: nn.Module) -> torch.Tensor:
-        print(x.shape)
+        # print(x.shape)
         return x + self.dropout(sublayer(self.norm(x))) # formula from the paper
     
 
 
 #EncoderBlock 
 class EncoderBlock(nn.Module):
-    def __init__(self, self_attention_layer: MultiHeadAttentionLayer, feed_forward_layer: FeedForwardLayer, dropout: float) -> None:
+    def __init__(self, features: int, self_attention_layer: MultiHeadAttentionLayer, feed_forward_layer: FeedForwardLayer, dropout: float) -> None:
         super().__init__()
         self.self_attention_layer = self_attention_layer
         self.feed_forward_layer = feed_forward_layer
         self.dropout = nn.Dropout(dropout) # dropout layer for regularization
-        self.residual_connection1 = ResidualConnection(dropout) # residual connection for the self-attention layer
-        self.residual_connection2 = ResidualConnection(dropout) # residual connection for the feedforward layer
+        self.residual_connection1 = ResidualConnection(features, dropout) # residual connection for the self-attention layer
+        self.residual_connection2 = ResidualConnection(features, dropout) # residual connection for the feedforward layer
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         # apply the first residual connection
         # (batch_size, seq_len, d_model) -> (batch_size, seq_len, d_model)
 
-        print(f"encoder block x shape {x.shape}")
+        # print(f"encoder block x shape {x.shape}")
         x = self.residual_connection1(x, lambda x: self.self_attention_layer(x, x, x, mask)) # formula from the paper
 
         # apply the second residual connection
@@ -184,10 +184,10 @@ class EncoderBlock(nn.Module):
         return x
 
 class Encoder(nn.Module):
-    def __init__(self, layers: nn.ModuleList) -> None:
+    def __init__(self, features: int, layers: nn.ModuleList) -> None:
         super().__init__()
         self.layers = layers
-        self.norm = LayerNorm()
+        self.norm = LayerNorm(features)
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         for layer in self.layers:
@@ -196,15 +196,15 @@ class Encoder(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, self_attention_layer: MultiHeadAttentionLayer, cross_attention_layer: MultiHeadAttentionLayer, feed_forward_layer: FeedForwardLayer, dropout: float) -> None:
+    def __init__(self, features: int, self_attention_layer: MultiHeadAttentionLayer, cross_attention_layer: MultiHeadAttentionLayer, feed_forward_layer: FeedForwardLayer, dropout: float) -> None:
         super().__init__()
         self.self_attention_layer = self_attention_layer
         self.cross_attention_layer = cross_attention_layer
         self.feed_forward_layer = feed_forward_layer
         self.dropout = nn.Dropout(dropout)
-        self.residual_connection1 = ResidualConnection(dropout)
-        self.residual_connection2 = ResidualConnection(dropout)
-        self.residual_connection3 = ResidualConnection(dropout)
+        self.residual_connection1 = ResidualConnection(features, dropout)
+        self.residual_connection2 = ResidualConnection(features, dropout)
+        self.residual_connection3 = ResidualConnection(features, dropout)
 
     def forward(self, x: torch.Tensor, encoder_output: torch.Tensor, source_mask: torch.Tensor, target_mask: torch.Tensor) -> torch.Tensor:
         x = self.residual_connection1(x, lambda x: self.self_attention_layer(x, x, x, target_mask)) # self-attention
@@ -213,10 +213,10 @@ class DecoderBlock(nn.Module):
         return x
   
 class Decoder(nn.Module):
-    def __init__(self, layers: nn.ModuleList) -> None:
+    def __init__(self, features: int, layers: nn.ModuleList) -> None:
         super().__init__()
         self.layers = layers
-        self.norm = LayerNorm()
+        self.norm = LayerNorm(features)
 
     def forward(self, x: torch.Tensor, encoder_output: torch.Tensor, source_mask: torch.Tensor, target_mask: torch.Tensor) -> torch.Tensor:
         for layer in self.layers:
@@ -251,7 +251,7 @@ class Transformer(nn.Module):
 
         return self.encoder(source, source_mask) # apply the encoder
     
-    def decode(self, target: torch.Tensor, encoder_output: torch.Tensor, source_mask: torch.Tensor, target_mask: torch.Tensor) -> torch.Tensor:
+    def decode(self, encoder_output: torch.Tensor, source_mask: torch.Tensor, target: torch.Tensor, target_mask: torch.Tensor) -> torch.Tensor:
         target = self.target_embedding(target) # apply the target embedding
         target = self.target_positional_encoding(target) # apply the positional encoding
         return self.decoder(target, encoder_output, source_mask, target_mask) # apply the decoder
@@ -273,7 +273,7 @@ def build_model(source_vocab_size: int, target_vocab_size: int, source_sequence_
     for _ in range(num_layers):
         encoder_self_attention_layer = MultiHeadAttentionLayer(d_model, num_heads, dropout) # self-attention
         encoder_feed_forward_layer = FeedForwardLayer(d_model, d_ff, dropout)
-        encoder_block = EncoderBlock(encoder_self_attention_layer, encoder_feed_forward_layer, dropout)
+        encoder_block = EncoderBlock(d_model, encoder_self_attention_layer, encoder_feed_forward_layer, dropout)
         encoder_blocks.append(encoder_block)
     
     # create the decoder layers
@@ -282,12 +282,12 @@ def build_model(source_vocab_size: int, target_vocab_size: int, source_sequence_
         decoder_self_attention_layer = MultiHeadAttentionLayer(d_model, num_heads, dropout) # self-attention
         decoder_cross_attention_layer = MultiHeadAttentionLayer(d_model, num_heads, dropout) # cross-attention
         decoder_feed_forward_layer = FeedForwardLayer(d_model, d_ff, dropout)
-        decoder_block = DecoderBlock(decoder_self_attention_layer, decoder_cross_attention_layer, decoder_feed_forward_layer, dropout)
+        decoder_block = DecoderBlock(d_model, decoder_self_attention_layer, decoder_cross_attention_layer, decoder_feed_forward_layer, dropout)
         decoder_blocks.append(decoder_block)
 
     # create encoder and decoder
-    encoder = Encoder(nn.ModuleList(encoder_blocks)) # encoder
-    decoder = Decoder(nn.ModuleList(decoder_blocks)) # decoder
+    encoder = Encoder(d_model, nn.ModuleList(encoder_blocks)) # encoder
+    decoder = Decoder(d_model, nn.ModuleList(decoder_blocks)) # decoder
 
     # create the projection layer
     projection_layer = ProjectionLayer(d_model, target_vocab_size) # projection layer

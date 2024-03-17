@@ -8,7 +8,7 @@ def get_config():
         'learning_rate': 10**-4,
         'd_model': 512,
         'lang_source': 'en',
-        'lang_target': 'it',
+        'lang_target': 'es',
         'preload': None,
         'tokenizer_file': "tokenizer_{0}.json",
         'seq_len': 512,

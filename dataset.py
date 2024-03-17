@@ -4,13 +4,13 @@ import torch.nn as nn
 from torch.utils.data import  Dataset
 
 class BilingualDataset(Dataset):
-    def __init__(self, ds, tokenizer_source, tokenizer_target, lang_source, lang_target, max_length):
+    def __init__(self, ds, tokenizer_source, tokenizer_target, lang_source, lang_target, seq_len):
         self.ds = ds
         self.tokenizer_source = tokenizer_source
         self.tokenizer_target = tokenizer_target
         self.lang_source = lang_source
         self.lang_target = lang_target
-        self.max_length = max_length
+        self.seq_len = seq_len
 
         print(tokenizer_target.token_to_id("[SOS]"))
 
@@ -32,8 +32,8 @@ class BilingualDataset(Dataset):
         source_encoded = self.tokenizer_source.encode(source_text).ids
         target_encoded = self.tokenizer_target.encode(target_text).ids
 
-        encoder_num_padding_tokens = self.max_length - len(source_encoded) - 2 # -2 for [SOS] and [EOS]
-        decoder_num_padding_tokens = self.max_length - len(target_encoded) - 1 # -1 for [EOS]
+        encoder_num_padding_tokens = self.seq_len - len(source_encoded) - 2 # -2 for [SOS] and [EOS]
+        decoder_num_padding_tokens = self.seq_len - len(target_encoded) - 1 # -1 for [EOS]
 
         if encoder_num_padding_tokens < 0 or decoder_num_padding_tokens < 0:
             raise ValueError("sentence is too long")
@@ -70,14 +70,14 @@ class BilingualDataset(Dataset):
             ]
         )
 
-        assert encoder_input.size(0) == self.max_length
-        assert decoder_input.size(0) == self.max_length
-        assert labels.size(0) == self.max_length
+        assert encoder_input.size(0) == self.seq_len
+        assert decoder_input.size(0) == self.seq_len
+        assert labels.size(0) == self.seq_len
 
         return {
             'encoder_input': encoder_input,
             'decoder_input': decoder_input,
-            "encoder_padding_mask": (encoder_input != self.pad_token).unsqueeze(0).unsqueeze(0).int(), # (1, 1, max_length)
+            "encoder_padding_mask": (encoder_input != self.pad_token).unsqueeze(0).unsqueeze(0).int(), # (1, 1, seq_len)
             "decoder_padding_mask": (decoder_input != self.pad_token).unsqueeze(0).unsqueeze(0).int() & causal_mask(decoder_input.size(0)),
             'labels': labels, 
             "source_text": source_text,

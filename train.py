@@ -54,8 +54,8 @@ def get_ds(config):
 
     ds_train, ds_validation = random_split(ds_raw, [train_ds_size, validation_ds_size])
 
-    train_ds = BilingualDataset(ds_train, tokenizer_source, tokenizer_target, config['lang_source'], config['lang_target'], config['max_length'])
-    validation_ds = BilingualDataset(ds_validation, tokenizer_source, tokenizer_target, config['lang_source'], config['lang_target'], config['max_length'])
+    train_ds = BilingualDataset(ds_train, tokenizer_source, tokenizer_target, config['lang_source'], config['lang_target'], config['seq_len'])
+    validation_ds = BilingualDataset(ds_validation, tokenizer_source, tokenizer_target, config['lang_source'], config['lang_target'], config['seq_len'])
 
     max_length_source = 0
     max_length_target = 0
@@ -123,12 +123,12 @@ def train_model(config):
             decoder_mask = batch['decoder_padding_mask'].to(device) # batch, 1, seq_len, seq_len - different mask
 
 
-            encoder_output = model.encoder(encoder_input, encoder_mask) # batch, seq_len, d_model
-            decoder_output = model.decoder(encoder_output, encoder_mask, decoder_input, decoder_mask) # batch, seq_len, d_model
+            encoder_output = model.encode(encoder_input, encoder_mask) # batch, seq_len, d_model
+            decoder_output = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask) # batch, seq_len, d_model
 
             projection = model.projection(decoder_output) # batch, seq_len, target_vocab_size - map to the target vocab
 
-            label = batch['label'].to(device) # batch, seq_len
+            label = batch['labels'].to(device) # batch, seq_len
 
             # # batch, seq_len, target_vocab_size -> batch * seq_len, target_vocab_size
             loss = loss_fn(projection.view(-1, tokenizer_target.get_vocab_size()), label.view(-1))
