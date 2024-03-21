@@ -25,10 +25,10 @@ def translate(sentence: str):
     label = ""
     if type(sentence) == int or sentence.isdigit():
         id = int(sentence)
-        ds = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='all')
-        ds = BilingualDataset(ds, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
-        sentence = ds[id]['src_text']
-        label = ds[id]["tgt_text"]
+        ds = load_dataset(f"{config['datasource']}", f"{config['lang_source']}-{config['lang_target']}", split='all')
+        ds = BilingualDataset(ds, tokenizer_src, tokenizer_tgt, config['lang_source'], config['lang_target'], config['seq_len'])
+        sentence = ds[id]['source_text']
+        label = ds[id]["target_text"]
     seq_len = config['seq_len']
 
     # translate the sentence
