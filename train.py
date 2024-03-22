@@ -43,6 +43,7 @@ def get_all_sentences(ds, lang):
 
 def get_ds(config):
     ds_raw = load_dataset("opus_books", f'{config["lang_source"]}-{config["lang_target"]}', split="train")
+    ds_raw = ds_raw.filter(lambda item: len(item["translation"]["en"]) < (config['seq_len'] - 20) and len(item["translation"]["es"]) < (config['seq_len'] - 20))
 
     # build tokenizers
     tokenizer_source = get_or_build_tokenizer(config, ds_raw, config['lang_source'])
